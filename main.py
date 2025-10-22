@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # pip install python-dotenv
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -10,29 +10,28 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.exceptions import TelegramForbiddenError
 
 # ===== ЗАГРУЗКА КОНФИГУРАЦИИ =====
-load_dotenv()
+load_dotenv()  # Читает .env файл
 
 TOKEN = os.getenv('TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID'))
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')
 MATERIAL_URL = os.getenv('MATERIAL_URL')
 
+# Проверка, что всё загрузилось
 if not all([TOKEN, ADMIN_ID, CHANNEL_USERNAME, MATERIAL_URL]):
     raise ValueError("❌ Проверь .env файл! Все поля обязательны.")
 
 DATA_FILE = 'users.json'
 
-# ===== ИСПРАВЛЕНИЕ ДЛЯ WINDOWS + RENDER =====
+# ===== ИСПРАВЛЕНИЕ ДЛЯ WINDOWS =====
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# ===== ПОРТ ДЛЯ RENDER =====
-PORT = int(os.getenv('PORT', 8080))
-
+# Инициализация
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-# ===== РАБОТА С ДАННЫМИ =====
+# Загрузка/сохранение данных
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -48,26 +47,23 @@ data = load_data()
 @dp.message(Command('start'))
 async def start_handler(message: Message):
     user_id = message.chat.id
-    user_key = str(user_id)
-    
-    if user_key not in data['users']:
-        data['users'][user_key] = {
+    if str(user_id) not in data['users']:
+        data['users'][str(user_id)] = {
             'first_interaction': datetime.now().isoformat(),
             'last_activity': datetime.now().isoformat(),
-            'has_material': False
+            'has_material': False  # Новый флаг по умолчанию
         }
     else:
-        data['users'][user_key]['last_activity'] = datetime.now().isoformat()
-    
+        data['users'][str(user_id)]['last_activity'] = datetime.now().isoformat()
     save_data(data)
     
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📚 Проверить подписку", callback_data="check_subscription")]
+        [InlineKeyboardButton(text="📚 Получить полезный материал", callback_data="check_subscription")]
     ])
     
     await message.answer(
-        f"👋 <b>Привет!</b>\n\n"
-        f"Подпишись на канал <b>{CHANNEL_USERNAME}</b> и нажми кнопку,\n"
+        f"👋 Привет!\n\n"
+        f"Подпишись на канал <b>{CHANNEL_USERNAME}</b> и нажми кнопку, "
         f"чтобы получить эксклюзивный материал по маркетингу! 🚀",
         reply_markup=markup,
         parse_mode='HTML'
@@ -78,6 +74,7 @@ async def check_subscription(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_key = str(user_id)
     
+    # Инициализируем пользователя, если нет
     if user_key not in data['users']:
         data['users'][user_key] = {
             'first_interaction': datetime.now().isoformat(),
@@ -90,37 +87,63 @@ async def check_subscription(callback: CallbackQuery):
     
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        
         is_subscribed = member.status in ['member', 'administrator', 'creator']
         
+        # Логика блокировки:
+        # - Если подписан И НЕ имеет материал — выдаём
+        # - Если подписан И имеет материал — напоминаем, что уже получил
+        # - Если НЕ подписан И имеет материал — блокируем, пока не переподпишется (флаг не сбрасывается)
+        # - Если НЕ подписан И НЕ имеет — стандартно просим подписаться
+        
         if is_subscribed:
-            # СБРОС ФЛАГА при переподписке
-            if user_data.get('has_material', False) and not is_subscribed:
+            # Сброс флага при переподписке (если был отписан)
+            if user_data.get('has_material', False):
                 user_data['has_material'] = False
                 save_data(data)
+                await callback.message.answer(
+                    "🎉 <b>Добро пожаловать обратно!</b>\n\n"
+                    "Вы переподписались — вот свежий материал заново:",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="📖 Получить материал", url=MATERIAL_URL)]
+                    ]),
+                    parse_mode='HTML'
+                )
+                return
             
-            # Показываем кнопку ПОЛУЧИТЬ МАТЕРИАЛ (проверка при клике)
-            material_btn_text = "🔓 Получить материал" if not user_data.get('has_material', False) else "🔓 Получить заново"
-            
-            markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=material_btn_text, callback_data="get_material")]
-            ])
-            
-            status_text = "новичок" if not user_data.get('has_material', False) else "вернулся"
-            await callback.message.answer(
-                f"✅ <b>Вы подписаны!</b>\n\n"
-                f"Нажмите кнопку — <b>подписка проверится заново</b> при получении:\n"
-                f"• Материал для {status_text} ✨",
-                reply_markup=markup,
-                parse_mode='HTML'
-            )
-            
+            if not user_data.get('has_material', False):
+                # Выдаём материал
+                markup = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📖 Получить материал", url=MATERIAL_URL)]
+                ])
+                
+                await callback.message.answer(
+                    "✅ <b>Вы подписаны!</b>\n\n"
+                    f"Вот ваш полезный материал по маркетингу и ботам Telegram:",
+                    reply_markup=markup,
+                    parse_mode='HTML'
+                )
+                
+                # Устанавливаем флаг
+                user_data['has_material'] = True
+                user_data['received_material'] = datetime.now().isoformat()
+                data['stats']['materials'] += 1
+                save_data(data)
+            else:
+                # Уже имеет материал
+                await callback.message.answer(
+                    "✅ <b>Вы подписаны!</b>\n\n"
+                    "Вы уже получали этот материал ранее. "
+                    "Хотите что-то новое? Следите за обновлениями в канале! 🚀",
+                    parse_mode='HTML'
+                )
         else:
-            # НЕ ПОДПИСАН
+            # Не подписан
             if user_data.get('has_material', False):
                 await callback.message.answer(
-                    f"🔒 <b>Материал заблокирован!</b>\n\n"
-                    f"Вы получили его ранее, но отписались от {CHANNEL_USERNAME}.\n"
-                    f"<b>Подпишитесь заново</b> для разблокировки! 🔓",
+                    "🔒 <b>Материал заблокирован!</b>\n\n"
+                    f"Вы уже получали его, но отписались от {CHANNEL_USERNAME}. "
+                    "Подпишитесь заново, чтобы разблокировать доступ! ✨",
                     parse_mode='HTML'
                 )
             else:
@@ -130,118 +153,104 @@ async def check_subscription(callback: CallbackQuery):
                 ])
                 
                 await callback.message.answer(
-                    f"❌ <b>Вы не подписаны</b> на {CHANNEL_USERNAME}\n\n"
-                    "1️⃣ Подпишитесь по кнопке\n"
-                    "2️⃣ Нажмите 'Проверить подписку'",
+                    f"❌ <b>Вы не подписаны</b> на канал {CHANNEL_USERNAME}\n\n"
+                    "Подпишись и нажми 'Проверить подписку' ещё раз! ✨",
                     reply_markup=markup,
                     parse_mode='HTML'
                 )
     
     except Exception as e:
         await callback.message.answer(
-            f"⚠️ <b>Ошибка проверки</b>\n\n"
-            f"Убедись, что бот — <b>админ</b> в канале.\n"
-            f"Детали: <code>{str(e)}</code>",
-            parse_mode='HTML'
+            f"⚠️ Ошибка проверки. Убедись, что бот — админ в канале.\n"
+            f"Детали: {str(e)}"
         )
     
     await callback.answer()
 
-@dp.callback_query(F.data == 'get_material')
-async def get_material(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    user_key = str(user_id)
-    user_data = data['users'].get(user_key, {})
-    
-    try:
-        # КРИТИЧЕСКАЯ ПРОВЕРКА ПОДПИСКИ ПРЯМО ПРИ КЛИКЕ
-        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        is_subscribed = member.status in ['member', 'administrator', 'creator']
-        
-        if is_subscribed:
-            # ✅ ПОДПИСКА АКТИВНА — ВЫДАЁМ МАТЕРИАЛ КАК ТЕКСТ
-            await callback.message.answer(
-                f"🎉 <b>ПОДПИСКА ПОДТВЕРЖДЕНА!</b>\n\n"
-                f"📚 <b>Ваш эксклюзивный материал:</b>\n"
-                f"<code>{MATERIAL_URL}</code>\n\n"
-                f"💡 Сохраните ссылку! Оставайтесь подписанным за обновлениями 🚀",
-                parse_mode='HTML'
-            )
-            
-            # Обновляем статистику
-            user_data['has_material'] = True
-            user_data['received_material'] = datetime.now().isoformat()
-            data['stats']['materials'] += 1
-            save_data(data)
-            
-        else:
-            # ❌ ОТПИСАЛСЯ ПОСЛЕ КНОПКИ ПРОВЕРКИ
-            await callback.message.answer(
-                f"🚫 <b>ОШИБКА! Вы отписались!</b>\n\n"
-                f"Материал <b>ЗАБЛОКИРОВАН</b>.\n\n"
-                f"🔄 <b>Подпишитесь заново</b> на {CHANNEL_USERNAME}\n"
-                f"   ↓ Нажмите /start для разблокировки",
-                parse_mode='HTML'
-            )
-    
-    except Exception as e:
-        await callback.message.answer(
-            f"⚠️ <b>Ошибка получения</b>\n\n"
-            f"<code>{str(e)}</code>\n\n"
-            f"Попробуйте /start"
-        )
-    
-    await callback.answer()
-
+# ===== ОСТАЛЬНОЙ КОД БЕЗ ИЗМЕНЕНИЙ =====
 @dp.message(Command('broadcast'))
 async def broadcast_handler(message: Message):
     if message.from_user.id != ADMIN_ID:
-        return await message.answer("❌ <b>Только админ!</b>")
+        return await message.answer("❌ Только админ!")
     
     if len(message.text.split()) < 2:
         await message.answer(
-            "📤 <b>РАССЫЛКА</b>\n\n"
-            "<code>/broadcast Ваш текст здесь</code>",
+            "📤 <b>Рассылка</b>\n\n"
+            "Используй: <code>/broadcast Твой текст здесь</code>",
             parse_mode='HTML'
         )
         return
     
     text = message.text.split(maxsplit=1)[1]
     active_users = [int(uid) for uid in data['users'].keys()]
-    sent_count = failed_count = 0
+    sent_count = 0
+    failed_count = 0
     
     for user_id in active_users:
         try:
             await bot.send_message(user_id, text)
             sent_count += 1
         except TelegramForbiddenError:
-            del data['users'][str(user_id)]
             failed_count += 1
-        except:
+            del data['users'][str(user_id)]
+        except Exception:
             failed_count += 1
     
+    # Статистика
     data['stats']['broadcasts'] += 1
     data['stats']['last_broadcast'] = datetime.now().isoformat()
     save_data(data)
     
     await message.answer(
-        f"📤 <b>РАССЫЛКА ОКОНЧЕНА</b>\n\n"
-        f"✅ <b>Отправлено:</b> {sent_count}\n"
-        f"❌ <b>Ошибок:</b> {failed_count}\n"
-        f"👥 <b>Активных:</b> {len(data['users'])}",
+        f"📤 <b>Рассылка завершена!</b>\n\n"
+        f"✅ Отправлено: {sent_count}\n"
+        f"❌ Ошибок: {failed_count}\n"
+        f"👥 Осталось активных: {len(data['users'])}",
         parse_mode='HTML'
     )
+
+@dp.message(Command('stats'))
+async def stats_handler(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return await message.answer("❌ Только админ!")
+    
+    total_users = len(data['users'])
+    materials_sent = data['stats'].get('materials', 0)
+    broadcasts = data['stats'].get('broadcasts', 0)
+    
+    # Активные за 30 дней + с материалом
+    active_30d = sum(1 for user in data['users'].values() 
+                     if 'received_material' in user and 
+                     datetime.now() - datetime.fromisoformat(user['received_material']) < timedelta(days=30))
+    
+    has_material_count = sum(1 for user in data['users'].values() if user.get('has_material', False))
+    
+    last_broadcast = data['stats'].get('last_broadcast', 'Никогда')
+    if last_broadcast != 'Никогда':
+        last_broadcast = datetime.fromisoformat(last_broadcast).strftime('%d.%m.%Y %H:%M')
+    
+    stats_text = (
+        f"📊 <b>СТАТИСТИКА БОТА</b>\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"📚 Материалов выдано: {materials_sent}\n"
+        f"🔒 Получили материал: {has_material_count}\n"
+        f"📤 Рассылок проведено: {broadcasts}\n"
+        f"🔥 Активных (30 дней): {active_30d}\n\n"
+        f"⏰ Последняя рассылка: {last_broadcast}"
+    )
+    
+    await message.answer(stats_text, parse_mode='HTML')
 
 @dp.message(Command('schedule'))
 async def schedule_handler(message: Message):
     if message.from_user.id != ADMIN_ID:
-        return await message.answer("❌ <b>Только админ!</b>")
+        return await message.answer("❌ Только админ!")
     
     if len(message.text.split()) < 3:
         await message.answer(
-            "⏰ <b>ОТЛОЖЕННАЯ РАССЫЛКА</b>\n\n"
-            "<code>/schedule HH:MM текст</code>\n\n"
-            "<i>Пример: /schedule 18:00 Привет!</i>",
+            "⏰ <b>Отложенная рассылка</b>\n\n"
+            "Формат: <code>/schedule HH:MM текст</code>\n"
+            "Пример: <code>/schedule 18:00 Привет, это тест!</code>",
             parse_mode='HTML'
         )
         return
@@ -260,14 +269,13 @@ async def schedule_handler(message: Message):
         asyncio.create_task(send_scheduled_broadcast(scheduled_time, text))
         
         await message.answer(
-            f"⏰ <b>Запланировано!</b>\n\n"
-            f"📅 <b>{scheduled_time.strftime('%d.%m.%Y %H:%M')}</b>\n"
-            f"📝 <i>{text[:50]}...</i>",
+            f"⏰ Рассылка запланирована на <b>{scheduled_time.strftime('%H:%M %d.%m.%Y')}</b>!\n"
+            f"📝 Текст: <code>{text[:50]}...</code>",
             parse_mode='HTML'
         )
         
-    except:
-        await message.answer("❌ <b>Формат:</b> HH:MM")
+    except ValueError:
+        await message.answer("❌ Неверный формат времени! Используй HH:MM")
 
 async def send_scheduled_broadcast(scheduled_time, text):
     delay = (scheduled_time - datetime.now()).total_seconds()
@@ -286,60 +294,27 @@ async def send_scheduled_broadcast(scheduled_time, text):
     data['stats']['broadcasts'] += 1
     data['stats']['last_broadcast'] = scheduled_time.isoformat()
     save_data(data)
-
-@dp.message(Command('stats'))
-async def stats_handler(message: Message):
-    if message.from_user.id != ADMIN_ID:
-        return await message.answer("❌ <b>Только админ!</b>")
     
-    total_users = len(data['users'])
-    materials_sent = data['stats'].get('materials', 0)
-    broadcasts = data['stats'].get('broadcasts', 0)
-    has_material_count = sum(1 for user in data['users'].values() if user.get('has_material', False))
-    
-    active_30d = sum(1 for user in data['users'].values() 
-                     if 'received_material' in user and 
-                     datetime.now() - datetime.fromisoformat(user['received_material']) < timedelta(days=30))
-    
-    last_broadcast = data['stats'].get('last_broadcast', 'Никогда')
-    if last_broadcast != 'Никогда':
-        last_broadcast = datetime.fromisoformat(last_broadcast).strftime('%d.%m.%Y %H:%M')
-    
-    stats_text = (
-        f"📊 <b>СТАТИСТИКА БОТА</b>\n\n"
-        f"👥 <b>Всего юзеров:</b> {total_users}\n"
-        f"📚 <b>Материалов выдано:</b> {materials_sent}\n"
-        f"🔒 <b>Имеют доступ:</b> {has_material_count}\n"
-        f"📤 <b>Рассылок:</b> {broadcasts}\n"
-        f"🔥 <b>Активных (30д):</b> {active_30d}\n\n"
-        f"⏰ <b>Последняя рассылка:</b> {last_broadcast}"
-    )
-    
-    await message.answer(stats_text, parse_mode='HTML')
+    print(f"⏰ Отложенная рассылка отправлена в {scheduled_time}! 👥 {sent_count} получателей")
 
 @dp.message(Command('help'))
 async def help_handler(message: Message):
     help_text = (
-        f"🤖 <b>БОТ {CHANNEL_USERNAME}</b>\n\n"
-        f"👤 <b>Для пользователей:</b>\n"
-        f"/start — Начать\n\n"
-        f"📤 <b>Для админа ({ADMIN_ID}):</b>\n"
-        f"/broadcast текст — Рассылка\n"
-        f"/schedule HH:MM текст — Отложенная\n"
-        f"/stats — Статистика\n"
-        f"/help — Помощь"
+        f"🤖 <b>Помощь по боту @{CHANNEL_USERNAME}</b>\n\n"
+        "/start - Начать работу\n"
+        "/help - Это сообщение\n\n"
+        f"📤 <b>Для админа:</b>\n"
+        "/broadcast Текст - Мгновенная рассылка\n"
+        "/schedule HH:MM Текст - Отложенная рассылка\n"
+        "/stats - Полная статистика"
     )
     
     await message.answer(help_text, parse_mode='HTML')
 
-# ===== WEBHOOK ДЛЯ RENDER =====
 async def main():
-    print("🤖 Бот запускается...")
+    print("🤖 Бот запущен!")
     print(f"📢 Канал: {CHANNEL_USERNAME}")
     print(f"👤 Админ: {ADMIN_ID}")
-    print(f"🌐 Порт: {PORT}")
-    
-    # POLLING для простоты (работает на Render)
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
