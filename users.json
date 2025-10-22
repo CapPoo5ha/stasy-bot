@@ -1,0 +1,19 @@
+{
+  "users": {
+    "814869622": {
+      "first_interaction": "2025-10-22T03:03:44.532780",
+      "last_activity": "2025-10-22T03:03:44.532780",
+      "received_material": "2025-10-22T03:03:53.252375"
+    },
+    "1021238377": {
+      "first_interaction": "2025-10-22T03:02:14.315604",
+      "last_activity": "2025-10-22T03:02:14.315604",
+      "received_material": "2025-10-22T03:02:27.534027"
+    }
+  },
+  "stats": {
+    "materials": 3,
+    "broadcasts": 4,
+    "last_broadcast": "2025-10-22T03:20:00"
+  }
+}
