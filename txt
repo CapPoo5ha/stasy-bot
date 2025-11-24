@@ -5,3 +5,12 @@ git commit -m "Initial bot commit"
 git branch -M main
 git remote add origin https://github.com/CapPoo5ha/stasy-bot.git
 git push -u origin main
+
+git pull origin main --allow-unrelated-histories
+git add .
+git push origin main
+
+git pull origin main --allow-unrelated-histories
+git add .
+git commit -m "final version with photo and 3 buttons"
+git push origin main
