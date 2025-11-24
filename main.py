@@ -1,4 +1,4 @@
-# main.py — финальная версия 2025
+# main.py — 100% рабочая версия (без стикеров, всё из .env)
 import asyncio
 import json
 import os
@@ -10,21 +10,20 @@ from aiogram.filters import Command
 from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 )
-from aiogram.exceptions import TelegramForbiddenError
 
 load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
-CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')      # @твой_канал
-MATERIAL_URL = "https://xmind.ai/share/rvBYg697"
-PRIVATE_CHAT = "https://t.me/Meilleur_amie"          # ← замени на свой!
+ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
+CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')        # @your_channel
+MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env
+PRIVATE_CHAT = os.getenv('PRIVATE_CHAT')                # из .env
 
-if not all([TOKEN, ADMIN_ID, CHANNEL_USERNAME]):
-    raise ValueError("Проверь переменные в Render!")
+if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
+    raise ValueError("Проверь .env: TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT обязательны!")
 
 DATA_FILE = 'users.json'
-PHOTO_PATH = "welcome.jpg"        # твоё красивое фото
+PHOTO_PATH = "welcome.jpg"
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -36,7 +35,7 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {'users': {}, 'stats': {'materials': 0, 'audits': 0, 'broadcasts': 0}}
+    return {'users': {}, 'stats': {'materials': 0, 'audits': 0}}
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -66,11 +65,9 @@ async def start_handler(message: Message):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Забрать шаблон", callback_data="get_template")],
         [InlineKeyboardButton(text="Получить мини-аудит ЦА", callback_data="get_audit")],
-        [InlineKeyboardButton(text="Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")]
+        [InlineKeyboardButton(text="Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME[1:] if CHANNEL_USERNAME.startswith('@') else CHANNEL_USERNAME}")]
     ])
 
-    # Стикер + фото + текст + кнопки
-    await message.answer_sticker("CAACAgIAAxkBAAEL9n1m2yAAAd4x8JAAAg1fX8v5v6vAAQIAA8AAAkmuWsHGikU7cGpqNTAE")
     if os.path.exists(PHOTO_PATH):
         await message.answer_photo(
             photo=FSInputFile(PHOTO_PATH),
@@ -81,7 +78,7 @@ async def start_handler(message: Message):
     else:
         await message.answer(WELCOME_TEXT, reply_markup=markup, parse_mode='HTML')
 
-# ==================== ЗАБРАТЬ ШАБЛОН ====================
+# ==================== ЗАБРАТЬ ШАБЛОН (кнопкой) ====================
 @dp.callback_query(F.data == "get_template")
 async def get_template(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -89,25 +86,24 @@ async def get_template(callback: CallbackQuery):
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
         if member.status in ['member', 'administrator', 'creator']:
             await callback.message.answer(
-                "Готово! Вот твой шаблон для аналитики ЦА:\n\n"
-                f"<code>{MATERIAL_URL}</code>\n\n"
-                "Сохрани и пользуйся!",
-                parse_mode='HTML', disable_web_page_preview=True
+                "Готово! Вот твой шаблон для аналитики ЦА:",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Открыть шаблон", url=MATERIAL_URL)]
+                ])
             )
             data['users'][str(user_id)]['has_material'] = True
             data['stats']['materials'] = data['stats'].get('materials', 0) + 1
             save_data(data)
         else:
             await callback.message.answer(
-                f"Ты ещё не подписан на {CHANNEL_USERNAME}\n\n"
-                "Подпишись и нажми кнопку заново",
+                f"Сначала подпишись на {CHANNEL_USERNAME}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-                    [InlineKeyboardButton(text="Проверить подписку", callback_data="get_template")]
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_template")]
                 ])
             )
-    except Exception as e:
-        await callback.message.answer("Ошибка проверки")
+    except Exception:
+        await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
 
 # ==================== МИНИ-АУДИТ ====================
@@ -117,40 +113,35 @@ async def get_audit(callback: CallbackQuery):
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
         if member.status in ['member', 'administrator', 'creator']:
-            await callback.message.answer_sticker("CAACAgIAAxkBAAEL9oFm2yAAAd5N8JAAAg2vX8v5v6vAAQIAA8AAAkmuWsHGikU7cGpqNTAE")
             await callback.message.answer(
-                "Подписка подтверждена!\n\n"
-                "Напиши мне в личку — я сделаю мини-аудит твоей ЦА бесплатно:",
+                "Подписка подтверждена!\n\nНапиши мне в личку — сделаю мини-аудит твоей ЦА бесплатно:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Написать мне в личку", url=PRIVATE_CHAT)]
+                    [InlineKeyboardButton(text="Написать в личку", url=PRIVATE_CHAT)]
                 ])
             )
             data['stats']['audits'] = data['stats'].get('audits', 0) + 1
             save_data(data)
         else:
             await callback.message.answer(
-                f"Сначала подпишись на {CHANNEL_USERNAME}\n\n"
-                "После подписки нажми кнопку заново",
+                f"Сначала подпишись на {CHANNEL_USERNAME}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-                    [InlineKeyboardButton(text="Проверить подписку", callback_data="get_audit")]
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_audit")]
                 ])
             )
-    except Exception as e:
-        await callback.message.answer("Ошибка проверки")
+    except Exception:
+        await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
 
 # ==================== АДМИНКА ====================
 @dp.message(Command('stats'))
 async def stats(message: Message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != int(ADMIN_ID): return
     total = len(data['users'])
-    templates = data['stats'].get('materials', 0)
-    audits = data['stats'].get('audits', 0)
     await message.answer(
         f"Пользователей: {total}\n"
-        f"Выдано шаблонов: {templates}\n"
-        f"Запросов мини-аудита: {audits}"
+        f"Шаблонов выдано: {data['stats'].get('materials', 0)}\n"
+        f"Запросов аудита: {data['stats'].get('audits', 0)}"
     )
 
 # ==================== WEBHOOK ДЛЯ RENDER ====================
