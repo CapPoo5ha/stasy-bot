@@ -191,9 +191,6 @@ async def receive_broadcast_text(message: Message):
             try:
                 await bot.send_message(int(uid), text, reply_markup=markup, parse_mode='HTML')
                 sent += 1
-            except TelegramForbiddenError:
-                del data['users'][uid]
-                failed += 1
             except:
                 failed += 1
         data['stats']['broadcasts'] = data['stats'].get('broadcasts', 0) + 1
