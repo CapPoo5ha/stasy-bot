@@ -193,54 +193,17 @@ async def receive_broadcast_text(message: Message):
             [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
         ])
         sent = failed = 0
-        for uid in list(data['users'].keys()):
-            try:
-                await bot.send_message(int(uid), text, reply_markup=markup, parse_mode='HTML')
+       # for uid in list(data['users'].keys()):
+        try:
+                await bot.send_message(int(814869622), text, reply_markup=markup, parse_mode='HTML')
                 sent += 1
-            except:
+        except:
                 failed += 1
         data['stats']['broadcasts'] = data['stats'].get('broadcasts', 0) + 1
         save_data(data)
         await message.answer(f"Рассылка завершена!\nОтправлено: {sent}\nОшибок/блоков: {failed}")
         broadcast_pending = False
 
-# ==================== ТЕСТОВАЯ РАССЫЛКА НА ОДНОГО ====================
-@test_broadcast_user_id == None
- # глобальная переменная для ID
-
-@dp.message(Command('test_broadcast'))
-async def test_broadcast(message: Message):
-    if message.from_user.id != int(ADMIN_ID):
-        return await message.answer("Только админ!")
-    # Парсим ID из команды, например /test_broadcast 123456789
-    args = message.text.split()
-    if len(args) < 2:
-        return await message.answer("Использование: /test_broadcast <user_id>\nПример: /test_broadcast 123456789")
-    try:
-        global test_broadcast_user_id
-        test_broadcast_user_id = int(args[1])
-        await message.answer(f"Тестовая рассылка подготовлена для пользователя {test_broadcast_user_id}\nТеперь отправь текст сообщения.")
-    except ValueError:
-        await message.answer("Неверный ID пользователя")
-
-@dp.message(F.text & ~F.command)  # ловим текст после /test_broadcast
-async def receive_test_broadcast(message: Message):
-    if message.from_user.id != int(ADMIN_ID):
-        return
-    global test_broadcast_user_id
-    if test_broadcast_user_id is not None:
-        text = message.text
-        markup = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
-        ])
-        try:
-            await bot.send_message(test_broadcast_user_id, text, reply_markup=markup, parse_mode='HTML')
-            await message.answer(f"Тестовая рассылка отправлена пользователю {test_broadcast_user_id}")
-        except Exception as e:
-            await message.answer(f"Ошибка отправки: {e}")
-        test_broadcast_user_id = None  # сбрасываем
-
-        
 # ==================== СТАТИСТИКА ====================
 @dp.message(Command('stats'))
 async def stats(message: Message):
@@ -273,7 +236,7 @@ async def admin_help(message: Message):
         "Удачной работы!"
     )
     await message.answer(help_text, parse_mode='HTML')
-
+    
 # ==================== WEBHOOK ДЛЯ RENDER ====================
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
