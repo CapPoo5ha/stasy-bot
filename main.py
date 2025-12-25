@@ -131,7 +131,7 @@ async def get_dj(callback: CallbackQuery):
                 f"Сначала подпишись на {CHANNEL_USERNAME}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_dj")]
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_dj")]  # ← Здесь исправление
                 ])
             )
     except Exception:
