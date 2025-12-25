@@ -193,11 +193,11 @@ async def receive_broadcast_text(message: Message):
             [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
         ])
         sent = failed = 0
-       # for uid in list(data['users'].keys()):
-        try:
-                await bot.send_message(int(814869622), text, reply_markup=markup, parse_mode='HTML')
+        for uid in list(data['users'].keys()):
+            try:
+                await bot.send_message(int(uid), text, reply_markup=markup, parse_mode='HTML')
                 sent += 1
-        except:
+            except:
                 failed += 1
         data['stats']['broadcasts'] = data['stats'].get('broadcasts', 0) + 1
         save_data(data)
@@ -222,7 +222,7 @@ async def stats(message: Message):
     )
 
 # ==================== ПОМОЩЬ ДЛЯ АДМИНА ====================
-@dp.message(Command('help'))
+@dp.message(Command('hell'))
 async def admin_help(message: Message):
     if message.from_user.id != int(ADMIN_ID):
         return  # или await message.answer("Нет доступа")
@@ -236,7 +236,7 @@ async def admin_help(message: Message):
         "Удачной работы!"
     )
     await message.answer(help_text, parse_mode='HTML')
-    
+
 # ==================== WEBHOOK ДЛЯ RENDER ====================
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
