@@ -206,7 +206,7 @@ async def receive_broadcast_text(message: Message):
 
 # ==================== СТАТИСТИКА ====================
 @dp.message(Command('stats'))
-async def stats(message: Message):
+async def statists(message: Message):
     if message.from_user.id != int(ADMIN_ID):
         return await message.answer("Доступ к статистике запрещён — только для админа")
     total = len(data['users'])
@@ -222,7 +222,7 @@ async def stats(message: Message):
 
 # ==================== ПОМОЩЬ ДЛЯ АДМИНА ====================
 @dp.message(Command('hell'))
-async def admin_help(message: Message):
+async def admin_hell(message: Message):
     if message.from_user.id != int(ADMIN_ID):
         return await message.answer("Нет доступа")
     total = len(data['users'])
@@ -236,7 +236,16 @@ async def admin_help(message: Message):
     )
     await message.answer( f"Пользователей: {total}\n")
     await message.answer( help_text, parse_mode='HTML')
-    
+
+ # ==================== ОБЩИЙ ЛОВЕЦ (ВСЕГДА В КОНЦЕ!) ====================
+@dp.message()  # ловит только то, что не попало в команды выше
+async def catch_all(message: Message):
+    # Игнорируем системные и не-текстовые сообщения
+    if message.content_type != 'text':
+        return
+    # Если это команда — она уже обработана выше
+    await start_handler(message)   
+
 # ==================== WEBHOOK ДЛЯ RENDER ====================
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
