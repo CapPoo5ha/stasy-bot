@@ -116,7 +116,7 @@ async def get_dj(callback: CallbackQuery):
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
         if member.status in ['member', 'administrator', 'creator']:
             if os.path.exists(PDF_PATH):
-                await callback.message.answer_chat_action("upload_document")
+                #await callback.message.chat.send_chat_action("upload_document")
                 await callback.message.answer_document(
                     document=FSInputFile(PDF_PATH),
                     caption="Готово! Тут я собрала тренды маркетинга в 2026 и план:\n\nСохрани и используй!",
