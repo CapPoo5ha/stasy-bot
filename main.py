@@ -1,4 +1,4 @@
-# main.py — 100% рабочая версия (без стикеров, всё из .env)
+# main.py — с подготовкой рассылки + кнопка PDF в рассылке
 import asyncio
 import json
 import os
@@ -16,15 +16,15 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')        # @your_channel
-MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env               # из .env
+MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env
 PRIVATE_CHAT = os.getenv('PRIVATE_CHAT')                # из .env
 
 if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
     raise ValueError("Проверь .env: TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT обязательны!")
-
+   
 DATA_FILE = 'users.json'
 PHOTO_PATH = "welcome.jpg"
-PDF_PATH="marketing2026.pdf"
+PDF_PATH = "marketing2026.pdf"
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -36,15 +36,14 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {'users': {}, 'stats': {'materials': 0, 'audits': 0}}
+    return {'users': {}, 'stats': {'materials': 0, 'audits': 0, 'broadcasts': 0}}
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 data = load_data()
-emoji1=u"\U0001F968"
-emoji2=u"\U0001F4CE"
+
 # ==================== ПРИВЕТСТВИЕ ====================
 WELCOME_TEXT = (
     "<b>Приветствую тебя, маркетинговый и креативный энтузиаст!</b>\n\n"
@@ -109,9 +108,9 @@ async def get_template(callback: CallbackQuery):
         await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
 
-# ==================== ЗАБРАТЬ ДОКУМЕНТ (кнопкой) ====================
+# ==================== ТРЕНДЫ 2026 + ПЛАН (PDF) ====================
 @dp.callback_query(F.data == "get_dj")
-async def get_template(callback: CallbackQuery):
+async def get_dj(callback: CallbackQuery):
     user_id = callback.from_user.id
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
@@ -132,12 +131,13 @@ async def get_template(callback: CallbackQuery):
                 f"Сначала подпишись на {CHANNEL_USERNAME}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_template")]
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_dj")]
                 ])
             )
     except Exception:
         await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
+
 # ==================== МИНИ-АУДИТ ====================
 @dp.callback_query(F.data == "get_audit")
 async def get_audit(callback: CallbackQuery):
@@ -165,7 +165,43 @@ async def get_audit(callback: CallbackQuery):
         await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
 
-# ==================== АДМИНКА ====================
+# ==================== ПОДГОТОВКА РАССЫЛКИ ====================
+broadcast_pending = False  # флаг ожидания текста
+
+@dp.message(Command('prepare_broadcast'))
+async def prepare_broadcast(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return await message.answer("Доступ запрещён — только админ")
+    global broadcast_pending
+    broadcast_pending = True
+    await message.answer("Отправь текст для рассылки.\nЯ добавлю кнопку «Тренды 2026 + план» (PDF).")
+
+@dp.message(F.text & ~F.command)  # ловим обычный текст
+async def receive_broadcast_text(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return
+    global broadcast_pending
+    if broadcast_pending:
+        text = message.text
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
+        ])
+        sent = failed = 0
+        for uid in list(data['users'].keys()):
+            try:
+                await bot.send_message(int(uid), text, reply_markup=markup, parse_mode='HTML')
+                sent += 1
+            except TelegramForbiddenError:
+                del data['users'][uid]
+                failed += 1
+            except:
+                failed += 1
+        data['stats']['broadcasts'] = data['stats'].get('broadcasts', 0) + 1
+        save_data(data)
+        await message.answer(f"Рассылка завершена!\nОтправлено: {sent}\nОшибок/блоков: {failed}")
+        broadcast_pending = False
+
+# ==================== СТАТИСТИКА ====================
 @dp.message(Command('stats'))
 async def stats(message: Message):
     if message.from_user.id != int(ADMIN_ID): return
@@ -173,7 +209,8 @@ async def stats(message: Message):
     await message.answer(
         f"Пользователей: {total}\n"
         f"Шаблонов выдано: {data['stats'].get('materials', 0)}\n"
-        f"Запросов аудита: {data['stats'].get('audits', 0)}"
+        f"Запросов аудита: {data['stats'].get('audits', 0)}\n"
+        f"Рассылок проведено: {data['stats'].get('broadcasts', 0)}"
     )
 
 # ==================== WEBHOOK ДЛЯ RENDER ====================
