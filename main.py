@@ -1,4 +1,4 @@
-# main.py — с подготовкой рассылки + кнопка PDF в рассылке
+# main.py — полностью исправленная версия (команды работают!)
 import asyncio
 import json
 import os
@@ -15,13 +15,13 @@ load_dotenv()
 
 TOKEN = os.getenv('TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
-CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')        # @your_channel
-MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env
-PRIVATE_CHAT = os.getenv('PRIVATE_CHAT')                # из .env
+CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')
+MATERIAL_URL = os.getenv('MATERIAL_URL')
+PRIVATE_CHAT = os.getenv('PRIVATE_CHAT')
 
 if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
-    raise ValueError("Проверь .env: TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT обязательны!")
-   
+    raise ValueError("Проверь .env!")
+
 DATA_FILE = 'users.json'
 PHOTO_PATH = "welcome.jpg"
 PDF_PATH = "marketing2026.pdf"
@@ -44,7 +44,6 @@ def save_data(data):
 
 data = load_data()
 
-# ==================== ПРИВЕТСТВИЕ ====================
 WELCOME_TEXT = (
     "<b>Приветствую тебя, маркетинговый и креативный энтузиаст!</b>\n\n"
     "Я Настя — маркетолог-стратег, и в этой сфере варюсь уже более 3 лет:\n\n"
@@ -55,8 +54,8 @@ WELCOME_TEXT = (
     "<b>Чтобы забрать — подпишись сперва на канал!</b>"
 )
 
-@dp.message(Command('start'))
-async def start_handler(message: Message):
+# ==================== ФУНКЦИЯ ПРИВЕТСТВИЯ ====================
+async def send_welcome(message: Message):
     user_id = str(message.from_user.id)
     if user_id not in data['users']:
         data['users'][user_id] = {'first_interaction': datetime.now().isoformat(), 'has_material': False}
@@ -80,6 +79,50 @@ async def start_handler(message: Message):
     else:
         await message.answer(WELCOME_TEXT, reply_markup=markup, parse_mode='HTML')
 
+# ==================== КОМАНДЫ ====================
+@dp.message(Command('start'))
+async def start_handler(message: Message):
+    await send_welcome(message)
+
+@dp.message(Command('prepare_broadcast'))
+async def prepare_broadcast(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return await message.answer("Доступ запрещён — только админ")
+    global broadcast_pending
+    broadcast_pending = True
+    await message.answer("Отправь текст для рассылки.\nЯ добавлю кнопку «Тренды 2026 + план» (PDF).")
+
+@dp.message(Command('stats'))
+async def stats(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        await message.answer("Доступ к статистике запрещён — только для админа")
+        return
+    total = len(data['users'])
+    materials = data['stats'].get('materials', 0)
+    audits = data['stats'].get('audits', 0)
+    broadcasts = data['stats'].get('broadcasts', 0)
+    await message.answer(
+        f"Пользователей: {total}\n"
+        f"Шаблонов выдано: {materials}\n"
+        f"Запросов аудита: {audits}\n"
+        f"Рассылок проведено: {broadcasts}"
+    )
+
+@dp.message(Command('help'))
+async def admin_help(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        await message.answer("Нет доступа")
+        return
+    help_text = (
+        "<b>Админ-панель бота</b>\n\n"
+        "/stats — Статистика пользователей и выдач\n"
+        "/prepare_broadcast — Подготовить рассылку всем (с кнопкой PDF)\n"
+        "/help — Это справочное сообщение\n\n"
+        "Удачной работы!"
+    )
+    await message.answer(help_text, parse_mode='HTML')
+
+# ==================== КНОПКИ (callback) ====================
 # ==================== ЗАБРАТЬ ШАБЛОН (кнопкой) ====================
 @dp.callback_query(F.data == "get_template")
 async def get_template(callback: CallbackQuery):
@@ -203,50 +246,39 @@ async def receive_broadcast_text(message: Message):
         save_data(data)
         await message.answer(f"Рассылка завершена!\nОтправлено: {sent}\nОшибок/блоков: {failed}")
         broadcast_pending = False
+# ==================== РАССЫЛКА ====================
+broadcast_pending = False
 
-# ==================== СТАТИСТИКА ====================
-@dp.message(Command('stats'))
-async def statists(message: Message):
+@dp.message(F.text & ~F.command)
+async def receive_broadcast_text(message: Message):
     if message.from_user.id != int(ADMIN_ID):
-        return await message.answer("Доступ к статистике запрещён — только для админа")
-    total = len(data['users'])
-    materials = data['stats'].get('materials', 0)
-    audits = data['stats'].get('audits', 0)
-    broadcasts = data['stats'].get('broadcasts', 0)  # если есть рассылки
-    await message.answer(
-        f"Пользователей: {total}\n"
-        f"Шаблонов выдано: {materials}\n"
-        f"Запросов аудита: {audits}\n"
-        f"Рассылок проведено: {broadcasts}"
-    )
+        return
+    global broadcast_pending
+    if broadcast_pending:
+        text = message.text
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
+        ])
+        sent = failed = 0
+        for uid in list(data['users'].keys()):
+            try:
+                await bot.send_message(int(uid), text, reply_markup=markup, parse_mode='HTML')
+                sent += 1
+            except:
+                failed += 1
+        data['stats']['broadcasts'] = data['stats'].get('broadcasts', 0) + 1
+        save_data(data)
+        await message.answer(f"Рассылка завершена!\nОтправлено: {sent}\nОшибок/блоков: {failed}")
+        broadcast_pending = False
 
-# ==================== ПОМОЩЬ ДЛЯ АДМИНА ====================
-@dp.message(Command('hell'))
-async def admin_hell(message: Message):
-    if message.from_user.id != int(ADMIN_ID):
-        return await message.answer("Нет доступа")
-    total = len(data['users'])
-    help_text = (
-        "<b>Админ-панель бота</b>\n\n"
-        "/stats — Статистика пользователей и выдач\n"
-        "/prepare_broadcast — Подготовить рассылку всем (с кнопкой PDF)\n"
-        "/test_broadcast <user_id> — Тестовая рассылка одному человеку\n"
-        "/help — Это справочное сообщение\n\n"
-        "Удачной работы!"
-    )
-    await message.answer( f"Пользователей: {total}\n")
-    await message.answer( help_text, parse_mode='HTML')
-
- # ==================== ОБЩИЙ ЛОВЕЦ (ВСЕГДА В КОНЦЕ!) ====================
-@dp.message()  # ловит только то, что не попало в команды выше
+# ==================== ОБЩИЙ ЛОВЕЦ ====================
+@dp.message()
 async def catch_all(message: Message):
-    # Игнорируем системные и не-текстовые сообщения
     if message.content_type != 'text':
         return
-    # Если это команда — она уже обработана выше
-    await start_handler(message)   
+    await send_welcome(message)
 
-# ==================== WEBHOOK ДЛЯ RENDER ====================
+# ==================== WEBHOOK ====================
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 
