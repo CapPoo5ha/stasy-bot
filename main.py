@@ -127,15 +127,21 @@ async def get_dj(callback: CallbackQuery):
             else:
                 await callback.message.answer("Ошибка: PDF-файл не найден на сервере")
         else:
+            # Не подписан — показываем кнопки подписки
             await callback.message.answer(
                 f"Сначала подпишись на {CHANNEL_USERNAME}",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_dj")]  # ← Здесь исправление
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_dj")]
                 ])
             )
-    except Exception:
-        await callback.message.answer("Ошибка проверки подписки")
+    except Exception as e:
+        # Любая ошибка API (бот не админ, канал недоступен и т.д.)
+        await callback.message.answer(
+            "Не удалось проверить подписку. Убедись, что ты подписан на канал\n"
+            "Попробуй позже или напиши" "/start"
+        )
+        print(f"Ошибка get_chat_member: {e}")  # для логов на сервере
     await callback.answer()
 
 # ==================== МИНИ-АУДИТ ====================
