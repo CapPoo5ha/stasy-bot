@@ -204,17 +204,75 @@ async def receive_broadcast_text(message: Message):
         await message.answer(f"Рассылка завершена!\nОтправлено: {sent}\nОшибок/блоков: {failed}")
         broadcast_pending = False
 
+# ==================== ТЕСТОВАЯ РАССЫЛКА НА ОДНОГО ====================
+@test_broadcast_user_id == None
+ # глобальная переменная для ID
+
+@dp.message(Command('test_broadcast'))
+async def test_broadcast(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return await message.answer("Только админ!")
+    # Парсим ID из команды, например /test_broadcast 123456789
+    args = message.text.split()
+    if len(args) < 2:
+        return await message.answer("Использование: /test_broadcast <user_id>\nПример: /test_broadcast 123456789")
+    try:
+        global test_broadcast_user_id
+        test_broadcast_user_id = int(args[1])
+        await message.answer(f"Тестовая рассылка подготовлена для пользователя {test_broadcast_user_id}\nТеперь отправь текст сообщения.")
+    except ValueError:
+        await message.answer("Неверный ID пользователя")
+
+@dp.message(F.text & ~F.command)  # ловим текст после /test_broadcast
+async def receive_test_broadcast(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return
+    global test_broadcast_user_id
+    if test_broadcast_user_id is not None:
+        text = message.text
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")]
+        ])
+        try:
+            await bot.send_message(test_broadcast_user_id, text, reply_markup=markup, parse_mode='HTML')
+            await message.answer(f"Тестовая рассылка отправлена пользователю {test_broadcast_user_id}")
+        except Exception as e:
+            await message.answer(f"Ошибка отправки: {e}")
+        test_broadcast_user_id = None  # сбрасываем
+
+        
 # ==================== СТАТИСТИКА ====================
 @dp.message(Command('stats'))
 async def stats(message: Message):
-    if message.from_user.id != int(ADMIN_ID): return
+    if message.from_user.id != int(ADMIN_ID):
+        await message.answer("Доступ к статистике запрещён — только для админа")
+        return
     total = len(data['users'])
+    materials = data['stats'].get('materials', 0)
+    audits = data['stats'].get('audits', 0)
+    broadcasts = data['stats'].get('broadcasts', 0)  # если есть рассылки
     await message.answer(
         f"Пользователей: {total}\n"
-        f"Шаблонов выдано: {data['stats'].get('materials', 0)}\n"
-        f"Запросов аудита: {data['stats'].get('audits', 0)}\n"
-        f"Рассылок проведено: {data['stats'].get('broadcasts', 0)}"
+        f"Шаблонов выдано: {materials}\n"
+        f"Запросов аудита: {audits}\n"
+        f"Рассылок проведено: {broadcasts}"
     )
+
+# ==================== ПОМОЩЬ ДЛЯ АДМИНА ====================
+@dp.message(Command('help'))
+async def admin_help(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return  # или await message.answer("Нет доступа")
+    
+    help_text = (
+        "<b>Админ-панель бота</b>\n\n"
+        "/stats — Статистика пользователей и выдач\n"
+        "/prepare_broadcast — Подготовить рассылку всем (с кнопкой PDF)\n"
+        "/test_broadcast <user_id> — Тестовая рассылка одному человеку\n"
+        "/help — Это справочное сообщение\n\n"
+        "Удачной работы!"
+    )
+    await message.answer(help_text, parse_mode='HTML')
 
 # ==================== WEBHOOK ДЛЯ RENDER ====================
 from aiohttp import web
