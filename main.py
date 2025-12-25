@@ -16,7 +16,7 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')        # @your_channel
-MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env
+MATERIAL_URL = os.getenv('MATERIAL_URL')                # из .env               # из .env
 PRIVATE_CHAT = os.getenv('PRIVATE_CHAT')                # из .env
 
 if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
@@ -24,6 +24,7 @@ if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
 
 DATA_FILE = 'users.json'
 PHOTO_PATH = "welcome.jpg"
+PDF_PATH="marketing2026.pdf"
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -51,7 +52,7 @@ WELCOME_TEXT = (
     "\U0001F968 работала на фрилансе в 20+ нишах\n"
     "\U0001F968 работала в креативном маркетинговом агентстве с федеральными и международными заказчиками\n"
     "\U0001F968 разработала 100+ рекламных кампаний и десятки масштабных стратегий\n\n"
-    "\U0001F4CE Забирай шаблон, без которого я не сажусь за аналитику ЦА. Или мини-аудит своей ЦА\n\n"
+    "\U0001F4CE Здесь я делюсь разными полезностями, которые можно забрать бесплатно\n\n"
     "<b>Чтобы забрать — подпишись сперва на канал!</b>"
 )
 
@@ -64,8 +65,9 @@ async def start_handler(message: Message):
     save_data(data)
 
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Забрать шаблон", callback_data="get_template")],
-        [InlineKeyboardButton(text="Получить мини-аудит ЦА", callback_data="get_audit")],
+        [InlineKeyboardButton(text="Шаблон анализа ЦА", callback_data="get_template")],
+        [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")],
+        [InlineKeyboardButton(text="Бесплатный мини-аудит ЦА", callback_data="get_audit")],
         [InlineKeyboardButton(text="Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME[1:] if CHANNEL_USERNAME.startswith('@') else CHANNEL_USERNAME}")]
     ])
 
@@ -107,6 +109,35 @@ async def get_template(callback: CallbackQuery):
         await callback.message.answer("Ошибка проверки подписки")
     await callback.answer()
 
+# ==================== ЗАБРАТЬ ДОКУМЕНТ (кнопкой) ====================
+@dp.callback_query(F.data == "get_dj")
+async def get_template(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    try:
+        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        if member.status in ['member', 'administrator', 'creator']:
+            if os.path.exists(PDF_PATH):
+                await callback.message.answer_chat_action("upload_document")
+                await callback.message.answer_document(
+                    document=FSInputFile(PDF_PATH),
+                    caption="Готово! Тут я собрала тренды маркетинга в 2026 и план:\n\nСохрани и используй!",
+                )
+                data['users'][str(user_id)]['has_pdf'] = True
+                data['stats']['materials'] = data['stats'].get('materials', 0) + 1
+                save_data(data)
+            else:
+                await callback.message.answer("Ошибка: PDF-файл не найден на сервере")
+        else:
+            await callback.message.answer(
+                f"Сначала подпишись на {CHANNEL_USERNAME}",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
+                    [InlineKeyboardButton(text="Я подписался — проверить", callback_data="get_template")]
+                ])
+            )
+    except Exception:
+        await callback.message.answer("Ошибка проверки подписки")
+    await callback.answer()
 # ==================== МИНИ-АУДИТ ====================
 @dp.callback_query(F.data == "get_audit")
 async def get_audit(callback: CallbackQuery):
