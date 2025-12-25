@@ -208,8 +208,7 @@ async def receive_broadcast_text(message: Message):
 @dp.message(Command('stats'))
 async def stats(message: Message):
     if message.from_user.id != int(ADMIN_ID):
-        await message.answer("Доступ к статистике запрещён — только для админа")
-        return
+        return await message.answer("Доступ к статистике запрещён — только для админа")
     total = len(data['users'])
     materials = data['stats'].get('materials', 0)
     audits = data['stats'].get('audits', 0)
@@ -225,8 +224,8 @@ async def stats(message: Message):
 @dp.message(Command('hell'))
 async def admin_help(message: Message):
     if message.from_user.id != int(ADMIN_ID):
-        return  # или await message.answer("Нет доступа")
-    
+        return await message.answer("Нет доступа")
+    total = len(data['users'])
     help_text = (
         "<b>Админ-панель бота</b>\n\n"
         "/stats — Статистика пользователей и выдач\n"
@@ -235,8 +234,9 @@ async def admin_help(message: Message):
         "/help — Это справочное сообщение\n\n"
         "Удачной работы!"
     )
-    await message.answer(help_text, parse_mode='HTML')
-
+    await message.answer( f"Пользователей: {total}\n")
+    await message.answer( help_text, parse_mode='HTML')
+    
 # ==================== WEBHOOK ДЛЯ RENDER ====================
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
