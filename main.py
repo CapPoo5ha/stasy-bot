@@ -25,7 +25,7 @@ if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
 DATA_FILE = 'users.json'
 PHOTO_PATH = "welcome.jpg"
 PDF_PATH = "marketing2026.pdf"
-PDF_PATH2 = "SarafanOff"
+PDF_PATH2 = "SarafanOff.pdf"
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
