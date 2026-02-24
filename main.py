@@ -25,6 +25,7 @@ if not all([TOKEN, CHANNEL_USERNAME, MATERIAL_URL, PRIVATE_CHAT]):
 DATA_FILE = 'users.json'
 PHOTO_PATH = "welcome.jpg"
 PDF_PATH = "marketing2026.pdf"
+PDF_PATH2 = "SarafanOff"
 
 if os.name == 'nt':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -36,7 +37,7 @@ def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {'users': {}, 'stats': {'materials': 0, 'audits': 0, 'broadcasts': 0}}
+    return {'users': {}, 'stats': {'materials': 0,'tmaterials': 0, 'audits': 0, 'broadcasts': 0, 'pdf_downloads': 0}}
 
 def save_data(data):
     with open(DATA_FILE, 'w', encoding='utf-8') as f:
@@ -65,6 +66,7 @@ async def send_welcome(message: Message):
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Шаблон анализа ЦА", callback_data="get_template")],
         [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")],
+        [InlineKeyboardButton(text="Чек-лист выход из сарафана", callback_data="get_pdf_file")],
         [InlineKeyboardButton(text="Бесплатный мини-аудит ЦА", callback_data="get_audit")],
         [InlineKeyboardButton(text="Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME[1:] if CHANNEL_USERNAME.startswith('@') else CHANNEL_USERNAME}")]
     ])
@@ -99,14 +101,29 @@ async def stats(message: Message):
         return
     total = len(data['users'])
     materials = data['stats'].get('materials', 0)
+    tmaterials = data['stats'].get('tmaterials', 0)
+    pdf_downloads = data['stats'].get('pdf_downloads', 0)
     audits = data['stats'].get('audits', 0)
     broadcasts = data['stats'].get('broadcasts', 0)
     await message.answer(
         f"Пользователей: {total}\n"
         f"Шаблонов выдано: {materials}\n"
+        f"Трендов выдано: {tmaterials}\n"
+        f"Чек-листов выдано: {pdf_downloads}\n"
         f"Запросов аудита: {audits}\n"
         f"Рассылок проведено: {broadcasts}"
     )
+
+
+@dp.message(Command('clear_stats'))
+async def clear_stats(message: Message):
+    if message.from_user.id != int(ADMIN_ID):
+        return await message.answer("Только админ может очищать статистику")
+    
+    data['stats'] = {'materials': 0,'tmaterials': 0, 'audits': 0, 'broadcasts': 0, 'pdf_downloads': 0}
+    save_data(data)
+    await message.answer("Статистика успешно очищена!")
+
 
 @dp.message(Command('help'))
 async def admin_help(message: Message):
@@ -165,7 +182,7 @@ async def get_dj(callback: CallbackQuery):
                     caption="Готово! Тут я собрала тренды маркетинга в 2026 и план:\n\nСохрани и используй!",
                 )
                 data['users'][str(user_id)]['has_pdf'] = True
-                data['stats']['materials'] = data['stats'].get('materials', 0) + 1
+                data['stats']['tmaterials'] = data['stats'].get('tmaterials', 0) + 1
                 save_data(data)
             else:
                 await callback.message.answer("Ошибка: PDF-файл не найден на сервере")
@@ -185,6 +202,34 @@ async def get_dj(callback: CallbackQuery):
             "Попробуй позже или напиши" "/start"
         )
         print(f"Ошибка get_chat_member: {e}")  # для логов на сервере
+    await callback.answer()
+
+# ==================== Чек-лист сарафан ====================
+@dp.callback_query(F.data == "get_pdf_file")
+async def get_pdf_file(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    try:
+        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        if member.status in ['member', 'administrator', 'creator']:
+            if os.path.exists(PDF_PATH2):
+                await callback.message.answer_document(
+                    document=FSInputFile(PDF_PATH2),
+                    caption="Готово! Вот чек-лист"
+                )
+                data['stats']['pdf_downloads'] = data['stats'].get('pdf_downloads', 0) + 1
+                save_data(data)
+            else:
+                await callback.message.answer("PDF не найден")
+        else:
+            await callback.message.answer(
+                "Сначала подпишись на канал",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="Подписаться", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
+                    [InlineKeyboardButton(text="Проверить", callback_data="get_pdf_file")]
+                ])
+            )
+    except Exception:
+        await callback.message.answer("Ошибка проверки")
     await callback.answer()
 
 # ==================== МИНИ-АУДИТ ====================
