@@ -67,7 +67,7 @@ async def send_welcome(message: Message):
         [InlineKeyboardButton(text="Шаблон анализа ЦА", callback_data="get_template")],
         [InlineKeyboardButton(text="Тренды 2026 + план", callback_data="get_dj")],
         [InlineKeyboardButton(text="Чек-лист выход из сарафана", callback_data="get_pdf_file")],
-        [InlineKeyboardButton(text="Бесплатный мини-аудит ЦА", callback_data="get_audit")],
+        [InlineKeyboardButton(text="Бесплатный разбор", callback_data="get_audit")],
         [InlineKeyboardButton(text="Подписаться на канал", url=f"https://t.me/{CHANNEL_USERNAME[1:] if CHANNEL_USERNAME.startswith('@') else CHANNEL_USERNAME}")]
     ])
 
@@ -133,6 +133,7 @@ async def admin_help(message: Message):
     help_text = (
         "<b>Админ-панель бота</b>\n\n"
         "/stats — Статистика пользователей и выдач\n"
+        "/clear_stats — Очистка статистики пользователей и выдач\n"
         "/prepare_broadcast — Подготовить рассылку всем (с кнопкой PDF)\n"
         "/help — Это справочное сообщение\n\n"
         "Удачной работы!"
@@ -232,7 +233,7 @@ async def get_pdf_file(callback: CallbackQuery):
         await callback.message.answer("Ошибка проверки")
     await callback.answer()
 
-# ==================== МИНИ-АУДИТ ====================
+# ==================== Разбор ====================
 @dp.callback_query(F.data == "get_audit")
 async def get_audit(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -240,7 +241,7 @@ async def get_audit(callback: CallbackQuery):
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
         if member.status in ['member', 'administrator', 'creator']:
             await callback.message.answer(
-                "Подписка подтверждена!\n\nНапиши мне в личку — сделаю мини-аудит твоей ЦА бесплатно:",
+                "Подписка подтверждена!\n\nУвидела Ваш запрос, жду теперь в личке:",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="Написать в личку", url=PRIVATE_CHAT)]
                 ])
